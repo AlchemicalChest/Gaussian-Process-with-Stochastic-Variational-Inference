@@ -42,7 +42,7 @@ class StochasticVariationalInference:
         (N,D) = x_tr.shape # dimensions
         t = 0
         z = self.sample_z()
-        index = np.random.choice(range(N), size=max(1, self.alpha*N), replace=False)
+        index = np.random.choice(range(N), size=max(1, self.alpha*N), replace=True)
         grad = self.gradient(z, x_tr[index, :], y_tr[index])
         val = self.objective(z, x_tr[index, :], y_tr[index])
         # for debugging        
@@ -65,7 +65,7 @@ class StochasticVariationalInference:
                 plt.grid(True)
                 plt.subplot(212)
                 lines2 = plt.plot(xdata, vals, 'r')
-                plt.ylim(np.min(vals)-10, np.max(vals)+10)
+                plt.ylim(np.min(vals)-1, np.max(vals)+1)
                 plt.grid(True)
             
         # perform stochastic gradient descent (max(func))
@@ -76,7 +76,7 @@ class StochasticVariationalInference:
             # sample z
             z = self.sample_z()
             # sample X
-            index = np.random.choice(range(N), size=max(1, self.alpha*N), replace=False)
+            index = np.random.choice(range(N), size=max(1, self.alpha*N), replace=True)
             grad = self.gradient(z, x_tr[index, :], y_tr[index])            
             val = self.objective(z, x_tr[index, :], y_tr[index])
             # for debugging
@@ -85,7 +85,7 @@ class StochasticVariationalInference:
                     xdata.append(t)
                     ydata1.append(np.sum(len(np.where(self.predict(x_tr) != y_tr)[0])) / float(x_tr.shape[0]))
                     lines1[0].set_data(xdata, ydata1)
-                    if x_te!=None and y_te!=None:
+                    if x_te is not None and y_te is not None:
                         ydata2.append(np.sum(len(np.where(self.predict(x_te) != y_te)[0])) / float(x_te.shape[0]))
                         lines1[1].set_data(xdata, ydata2)
                     plt.subplot(211)
@@ -95,7 +95,7 @@ class StochasticVariationalInference:
                     lines2[0].set_data(xdata, vals)
                     plt.subplot(212)
                     plt.xlim(xmax=np.max(xdata))
-                    plt.ylim(np.min(vals)-10, np.max(vals)+10)
+                    plt.ylim(np.min(vals)-1, np.max(vals)+1)
                     plt.draw()
                 if not self.mute and self.plot:
                     if x_te!=None and y_te!=None:

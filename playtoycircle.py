@@ -13,7 +13,7 @@ from GPClassificationSVI import GPClassificationSVI
 
 np.random.seed(0)
 
-xdata, ydata = datasets.make_circles(n_samples=400, noise=0.1, factor=0.5)
+xdata, ydata = datasets.make_circles(n_samples=400, noise=0.1,random_state=0, factor=0.5)
 
 
 from sklearn.cross_validation import train_test_split
@@ -26,8 +26,10 @@ ax = plt.subplot(221)
 ax.set_title('Original Testing Data')
 ax.scatter(x_te[:,0], x_te[:,1], c=[colors[y] for y in y_te], s=40)
 
-clf = GPClassificationSVI(sample=0.30, max_iter=6, debug=True, mute=False, plot=True)
-clf.score(x_tr, y_tr, x_te, y_te, num_hidden_variables=40, num_samples=15, hyper_param = 1)
+clf = GPClassificationSVI(alpha=0.1, max_iter=500, debug=True, mute=False, plot=True, \
+                          learning_rate=0.001, num_hidden_variables=60, quad_deg=30, hyper_param=1)
+#clf.score(x_tr, y_tr, x_te, y_te)
+clf.fit(x_tr, y_tr)
 pd = clf.predict(x_te)
 print('SVI error = {}'.format(np.sum(len(np.where(pd != y_te)[0])) / float(x_te.shape[0])))
 plt.figure(2)
