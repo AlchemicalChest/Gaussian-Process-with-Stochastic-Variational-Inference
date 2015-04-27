@@ -63,11 +63,11 @@ del n, clf, t0
 #%% run GP
 from GPClassificationSVI import GPClassificationSVI
 t0 = time.time()
-clf = GPClassificationSVI(alpha=0.5, max_iter=1000, debug=True, mute=False, plot=True, \
+clf = GPClassificationSVI(alpha=0.1, max_iter=2000, debug=True, mute=False, plot=True, \
                           learning_rate=0.01, num_hidden_variables=30, quad_deg=20, hyper_param=1)
 #clf.fit(x_tr, y_tr, num_hidden_variables=10, num_samples=20, hyper_param = 1)
-clf.score(x_tr, y_tr, x_te, y_te)
-#clf.fit(x_tr, y_tr)
+#clf.score(x_tr, y_tr, x_te, y_te)
+clf.fit(x_tr, y_tr)
 gpsvi_pd = clf.predict(x_te)
 gpsvi_probs = clf.predict_prob(x_te)
 (n,_) = x_te.shape

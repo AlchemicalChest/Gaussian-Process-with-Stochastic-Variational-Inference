@@ -50,6 +50,7 @@ class StochasticVariationalInference:
             if self.plot:
                 from matplotlib import pyplot as plt
                 plt.figure(1)
+                plt.ion()
                 xdata = [t] # steps
                 vals = [val]
                 ydata1 = [np.sum(len(np.where(self.predict(x_tr) != y_tr)[0])) / float(x_tr.shape[0])]

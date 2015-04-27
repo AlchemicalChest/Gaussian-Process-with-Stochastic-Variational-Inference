@@ -26,6 +26,7 @@ class GPClassificationSVI(StochasticVariationalInference):
         self.gaussHermite = GaussHermite(quad_deg)
         self.hyper_param = hyper_param
         self.learning_rate = learning_rate
+        self.r0 = learning_rate
         self.mask = np.tril(np.ones((num_hidden_variables, num_hidden_variables))).flatten()      
     
     def score(self, x_tr, y_tr, x_te, y_te):
@@ -37,7 +38,7 @@ class GPClassificationSVI(StochasticVariationalInference):
         self.hidden_variables = np.array(x_tr[choice(range(N), size=M, replace=True), :])
         self.Kmm_inv = linalg.pinv(self.kernel(self.hidden_variables, self.hidden_variables))
         self.parameters = randn(M*C + M*M*C)
-        self.grads = [np.zeros(M*C + M*M*C), np.zeros(M*C + M*M*C)]
+#        self.grads = [np.zeros(M*C + M*M*C), np.zeros(M*C + M*M*C)]
         self.infer_parameters(x_tr, y_tr, x_te, y_te)
     
     def fit(self, x_tr, y_tr):
@@ -49,7 +50,7 @@ class GPClassificationSVI(StochasticVariationalInference):
         self.hidden_variables = np.array(x_tr[choice(range(N), size=M, replace=True), :])
         self.Kmm_inv = linalg.pinv(self.kernel(self.hidden_variables, self.hidden_variables))
         self.parameters = randn(M*C + M*M*C)
-        self.grads = [np.zeros(M*C + M*M*C), np.zeros(M*C + M*M*C)]
+#        self.grads = [np.zeros(M*C + M*M*C), np.zeros(M*C + M*M*C)]
         self.infer_parameters(x_tr, y_tr)
         
     def objective(self, z, x_tr, y_tr):
@@ -62,7 +63,7 @@ class GPClassificationSVI(StochasticVariationalInference):
         Knn = self.kernel(x_tr, x_tr)
         Knm = self.kernel(x_tr, h)
         Kmm = self.kernel(h, h)
-        A = Knm.dot(linalg.pinv(Kmm))
+        A = Knm.dot(self.Kmm_inv)
         mu = []
         sigma = []
         for j in range(C):
@@ -100,6 +101,7 @@ class GPClassificationSVI(StochasticVariationalInference):
         sigma = np.diag(Knn - Knm.dot(Kmm_inv).dot(Knm.T)) # cov for f
         mu = [Knm.dot(Kmm_inv).dot(u[j]) for j in range(C)] # mean for f
         A = Knm.dot(Kmm_inv)
+        delta = [np.diag(1/self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M,M).diagonal()) for c in range(C)]
 
         for i in range(N):
             y = y_tr[i]
@@ -117,37 +119,33 @@ class GPClassificationSVI(StochasticVariationalInference):
         for j in range(C):
             grad[M*j:M*(j+1)] -= Kmm_inv.dot(u[j]).flatten()
             grad[M*C+M*M*j:M*C+M*M*(j+1)] -= Kmm_inv.dot(u[j]).dot(z.T).flatten()
+            grad[M*C+M*M*j:M*C+M*M*(j+1)] += delta[j].flatten()
         return grad
     
     def sample_z(self):
         return normal(0, 1, (self.num_hidden_variables, 1))
     
     def update(self, z, x_tr, y_tr, val, gradient, t):
+        N,_ = x_tr.shape
         M = self.num_hidden_variables
         C = self.num_classes
-        
-        self.grads.append(gradient)
-        gamma1 = 0.0000000001
-        gamma2 = 0.0000000001
         rho1 = self.learning_rate
         rho2 = self.learning_rate*0.1
         self.parameters[0:M*C] += rho1 * gradient[0:M*C]
         self.parameters[M*C: ] += rho2 * gradient[M*C: ]
-        
-        self.learning_rate = self.learning_rate + gamma1 * self.grads[1].dot(self.grads[2]) \
-                                                + gamma2 * self.grads[0].dot(self.grads[1])
-        del self.grads[0]
+        self.learning_rate = self.r0*(1+self.r0*0.05*t)**(-3/4)
 #        print(self.learning_rate)
-        
-#        rho_1 = self.learning_rate
-#        rho_2 = self.learning_rate*0.1
-#        self.parameters[0:M*C] += rho_1 * gradient[0:M*C]
-#        self.parameters[M*C: ] += rho_2 * gradient[M*C: ]
-#        for j in range(C):
-#            self.parameters[M*C+M*M*j:M*C+M*M*(j+1)] = np.multiply(self.parameters[M*C+M*M*j:M*C+M*M*(j+1)], self.mask)
-#        if t % 20 == 0:
-#            self.learning_rate *= 0.95 
-#np.array(x_tr[np.random.choice(range(N), size=M, replace=True), :])
+#        if np.random.random() > 0.9:
+#            h = self.hidden_variables
+#            self.hidden_variables[choice(range(M),size=M*0.1,replace=False)] = x_tr[choice(range(N),size=M*0.1,replace=False)]
+#            self.Kmm_inv = linalg.pinv(self.kernel(self.hidden_variables, self.hidden_variables))
+#            z0 = self.sample_z()
+#            val_new = 0
+#            for i in range(10):
+#                val_new += self.objective(z0, x_tr, y_tr)
+#            val_new /= 10
+#            if val_new < val*0.7:
+#                self.hidden_variables = h
         
     def predict_prob(self, x_te):
         (N,D) = x_te.shape
