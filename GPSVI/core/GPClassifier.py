@@ -10,9 +10,9 @@ from math import exp, sqrt, pi
 from numpy.random import normal, choice
 from scipy import linalg
 from matplotlib import pyplot as plt
-from ..util.inverse import cho_inverse
-from ..util.kernel import compute_kernel
-from ..util.quadrature import GaussHermiteQuadrature
+from GPSVI.util.inverse import cho_inverse
+from GPSVI.util.kernel import compute_kernel
+from GPSVI.util.quadrature import GaussHermiteQuadrature
 
 class GPClassifier:
 
