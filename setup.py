@@ -26,12 +26,5 @@ setup(name = 'GPSVI',
       py_modules = ['GPSVI.__init__'],
       long_description=read('README.md'),
       install_requires=['numpy>=1.7', 'scipy>=0.12'],
-      extras_require = {'docs':['matplotlib >=1.3','Sphinx','IPython']},
-      classifiers=['License :: OSI Approved :: BSD License',
-                   'Natural Language :: English',
-                   'Operating System :: MacOS :: MacOS X',
-                   'Operating System :: Microsoft :: Windows',
-                   'Operating System :: POSIX :: Linux',
-                   'Programming Language :: Python :: 2.7',
-                   'Topic :: Scientific/Engineering :: Artificial Intelligence']
+      extras_require = {'docs':['matplotlib >=1.3','Sphinx','IPython']}
       )
