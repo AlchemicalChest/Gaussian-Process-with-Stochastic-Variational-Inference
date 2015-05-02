@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sun Apr 12 20:20:48 2015
 
@@ -92,7 +91,7 @@ class GPClassifier:
 
     def score(self, xTe, yTe):
         pd = self.predict(xTe)
-        return 1-np.sum(len(np.where(pd != yTe)[0])) / float(xTe.shape[0])
+        return 1 - len(np.where(pd != yTe)[0]) / float(xTe.shape[0])
 
     def objective(self, z, indices):
         val = 0
@@ -104,14 +103,32 @@ class GPClassifier:
         Knn = self.Knn[indices, indices]
         Kmm = self.Kmm
         A = self.A[indices, :]
+#new
+#        samples = self.quad.get_samples().reshape((S, 1))
+#        weights = self.quad.get_weights().reshape((S, 1))
+#        f = []
+#        for c in range(C):
+#            m = self.parameters[M*c:M*(c+1)].reshape(M, 1)
+#            L = self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M, M)
+#            mu = A.dot(m)
+#            sigma = np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()).reshape((1,N))
+#            f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
+#        sumf = np.sum(f, axis=0)
+#        for i in range(N):
+#            y = target[i]
+#            proba = f[y][i]/sumf[y]
+#            val += np.log(proba)
+        
+        
+#old
         mu = []
         sigma = []
         for j in range(C):
             m = self.parameters[M*j:M*(j+1)].reshape(M, 1)
             L = self.parameters[M*C+M*M*j:M*C+M*M*(j+1)].reshape(M, M)
             mu.append(A.dot(m).ravel())
-            sigma.append((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal())
-        func = lambda c: exp(samples[k]*abs(sigma[c][i]) + mu[c][i])
+            sigma.append(np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()))
+        func = lambda c: exp(samples[k]*sigma[c][i] + mu[c][i])
         samples = self.quad.get_samples()
         weights = self.quad.get_weights()
         for i in range(N):
@@ -125,7 +142,8 @@ class GPClassifier:
                     exp_sum += expf
                     if num == y:
                         expf_y = expf
-                sample_sum += weights[k]**C*expf_y/exp_sum
+#                sample_sum += weights[k]**C*expf_y/exp_sum
+                sample_sum += weights[k] * expf_y / exp_sum
             sample_sum /= sqrt(pi)
             val += np.log(sample_sum)
         return val/N
@@ -145,29 +163,45 @@ class GPClassifier:
         Knm = self.Knm[indices, :]
         Kmm_inv = self.Kmm_inv
         A = self.A[indices]
-        sigma = np.diag(Knn - A.dot(Knm.T))
-        mu = [A.dot(u[j]).ravel() for j in range(C)]
         delta = [np.diag(1.0/self.parameters[M*C+M*M*c:M*C+M*M*(c+1)]\
                                  .reshape(M, M).diagonal()) for c in range(C)]
-        func = lambda c: exp(samples[k]*abs(sigma[i]) + mu[c][i])
-        samples = self.quad.get_samples()
-        weights = self.quad.get_weights()
+# new
+        sigma = np.abs(np.diag(Knn - A.dot(Knm.T))).reshape((1, N))
+        samples = self.quad.get_samples().reshape((S, 1))
+        weights = self.quad.get_weights().reshape((S, 1))
+        f = []
+        for c in range(C):
+            mu = A.dot(u[c])
+            f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
+        sumf = np.sum(f, axis=0)
         for i in range(N):
             y = target[i]
-            sample_sum = 0
-            for k in range(S):
-#                expf_map = map(lambda c:exp(samples[k]*abs(sigma[i]) + mu[c][i]), range(C))
-                expf_map = map(func, range(C))
-                exp_sum = 0
-                for expf, num in zip(expf_map, range(C)):
-                    exp_sum += expf
-                    if num == y:
-                        expf_y = expf
-                sample_sum += weights[k]**C * expf_y/exp_sum
-            sample_sum /= sqrt(pi)
-            grad[M*y:M*(y+1)] += (1-sample_sum)*A[i, :]
+            approx = f[y][i]/sumf[y]
+            grad[M*y:M*(y+1)] += (1-approx)*A[i, :]
             grad[M*C+M*M*y:M*C+M*M*(y+1)] += \
-                (1-sample_sum)*A[i, :].reshape(M, 1).dot(z.T).ravel()
+                          (1-approx)*A[i, :].reshape(M, 1).dot(z.T).ravel()
+## old
+#        sigma = np.abs(np.diag(Knn - A.dot(Knm.T)))
+#        mu = [A.dot(u[j]).ravel() for j in range(C)]
+#        func = lambda c: exp(samples[k]*sigma[i] + mu[c][i])
+#        samples = self.quad.get_samples()
+#        weights = self.quad.get_weights()
+#        for i in range(N):
+#            y = target[i]
+#            sample_sum = 0
+#            for k in range(S):
+#                expf_map = map(func, range(C))
+#                exp_sum = 0
+#                for expf, num in zip(expf_map, range(C)):
+#                    exp_sum += expf
+#                    if num == y:
+#                        expf_y = expf
+##                sample_sum += weights[k]**C * expf_y/exp_sum
+#                sample_sum += weights[k] * expf_y / exp_sum
+#            sample_sum /= sqrt(pi)
+#            grad[M*y:M*(y+1)] += (1-sample_sum)*A[i, :]
+#            grad[M*C+M*M*y:M*C+M*M*(y+1)] += \
+#                (1-sample_sum)*A[i, :].reshape(M, 1).dot(z.T).ravel()
 
         for j in range(C):
             grad[M*j:M*(j+1)] -= Kmm_inv.dot(u[j]).ravel()
@@ -229,30 +263,45 @@ class GPClassifier:
         Kmm = self.kernel(h, h)
         Kmm_inv = cho_inverse(Kmm)
         A = Knm.dot(Kmm_inv)
-        mu = []
-        sigma = []
-        for j in range(C):
-            m = self.parameters[M*j:M*(j+1)].reshape(M, 1)
-            L = self.parameters[M*C+M*M*j:M*C+M*M*(j+1)].reshape(M, M)
-            mu.append(A.dot(m).ravel())
-            sigma.append((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal())
-        func = lambda c: exp(samples[k]*abs(sigma[c][i]) + mu[c][i])
-        samples = self.quad.get_samples()
-        weights = self.quad.get_weights()
+        
+# new
+        samples = self.quad.get_samples().reshape((S, 1))
+        weights = self.quad.get_weights().reshape((S, 1))
+        f = []
+        for c in range(C):
+            m = self.parameters[M*c:M*(c+1)].reshape(M, 1)
+            L = self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M, M)
+            mu = A.dot(m)
+            sigma = np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()).reshape((1,N))
+            f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
+        sumf = np.sum(f, axis=0)
         for i in range(N):
-            sample_sum = 0
-            for j in range(C):
-                for k in range(S):
-#                    expf_map = map(lambda c: exp(samples[k]*abs(sigma[c][i]) + mu[c][i]), range(C))
-                    expf_map = map(func, range(C))
-                    exp_sum = 0
-                    for expf, num in zip(expf_map, range(C)):
-                        exp_sum += expf
-                        if num == j:
-                            expf_y = expf
-                    sample_sum += weights[k]**C * expf_y/exp_sum
-                sample_sum /= sqrt(pi)
-                probs[i, j] = sample_sum
+            probs[i, :] = [f[c][i]/sumf[c] for c in range(C)]
+## old
+#        mu = []
+#        sigma = []
+#        for j in range(C):
+#            m = self.parameters[M*j:M*(j+1)].reshape(M, 1)
+#            L = self.parameters[M*C+M*M*j:M*C+M*M*(j+1)].reshape(M, M)
+#            mu.append(A.dot(m).ravel())
+#            sigma.append(np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()))
+#        func = lambda c: exp(samples[k]*sigma[c][i] + mu[c][i])
+#        samples = self.quad.get_samples()
+#        weights = self.quad.get_weights()
+#        for i in range(N):
+#            sample_sum = 0
+#            for j in range(C):
+#                for k in range(S):
+#                    expf_map = map(func, range(C))
+#                    exp_sum = 0
+#                    for expf, num in zip(expf_map, range(C)):
+#                        exp_sum += expf
+#                        if num == j:
+#                            expf_y = expf
+##                    sample_sum += weights[k]**C * expf_y/exp_sum
+#                    sample_sum += weights[k] * expf_y/exp_sum
+#                sample_sum /= sqrt(pi)
+#                probs[i, j] = sample_sum
         return probs
 
     def predict(self, xTe):

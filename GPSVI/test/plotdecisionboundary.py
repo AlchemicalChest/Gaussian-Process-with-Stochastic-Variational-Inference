@@ -11,10 +11,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
-from GPClassifier import GPClassifier
+from GPSVI.core.GPClassifier import GPClassifier
 from sklearn.cross_validation import train_test_split
 
-np.random.seed(1)
+np.random.seed(0)
 
 xdata, ydata = datasets.make_moons(n_samples=800, noise=0.1)
 xTr, xTe, yTr, yTe = train_test_split(xdata, ydata, test_size=0.50)
@@ -34,10 +34,10 @@ cm_bright = ListedColormap(['#d7191c', '#2b83ba'])
 #plt.ylim(yy.min(), yy.max())
 
 #%% gp svi
-clf_gp = GPClassifier(xTr, yTr, \
-                   alpha=0.7, max_iter=500, num_inducing_points=50, \
-                   kernel_type='rbf', kernel_args={'gamma':2.0}, \
-                   learning_rate=0.01, verbose=2)
+clf_gp = GPClassifier(xTr, yTr, xTe, yTe, \
+                      alpha=0.7, max_iter=500, num_inducing_points=200, \
+                      kernel_type='rbf', kernel_args={'gamma':2.0}, \
+                      learning_rate=0.01, verbose=3)
 clf_gp.fit()
 score = clf_gp.score(xTe, yTe)
 zz = clf_gp.predict_proba(np.c_[xx.ravel(), yy.ravel()])
