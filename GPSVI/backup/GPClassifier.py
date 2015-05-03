@@ -69,9 +69,7 @@ class GPClassifier:
             for i in range(C):
                 indices, = np.where(self.yTr == self.labels[i])
                 self.labels_dist.append(indices)
-            subset = self.sample_x(M)
-            self.inducing_points = xTr[subset]
-            self.inducing_points_target = yTr[subset]
+            self.inducing_points = xTr[self.sample_x(M)]
             if self.verbose > 0:
                 print('computing kernel matrices...')
             self.Kmm = self.kernel(self.inducing_points, self.inducing_points)
@@ -105,6 +103,7 @@ class GPClassifier:
         Knn = self.Knn[indices, indices]
         Kmm = self.Kmm
         A = self.A[indices, :]
+#new
         samples = self.quad.get_samples().reshape((S, 1))
         weights = self.quad.get_weights().reshape((S, 1))
         f = []
@@ -117,8 +116,36 @@ class GPClassifier:
         sumf = np.sum(f, axis=0)
         for i in range(N):
             y = target[i]
-            proba = f[y][i]/sumf[i]
+            proba = f[y][i]/sumf[y]
             val += np.log(proba)
+        
+        
+##old
+#        mu = []
+#        sigma = []
+#        for j in range(C):
+#            m = self.parameters[M*j:M*(j+1)].reshape(M, 1)
+#            L = self.parameters[M*C+M*M*j:M*C+M*M*(j+1)].reshape(M, M)
+#            mu.append(A.dot(m).ravel())
+#            sigma.append(np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()))
+#        func = lambda c: exp(samples[k]*sigma[c][i] + mu[c][i])
+#        samples = self.quad.get_samples()
+#        weights = self.quad.get_weights()
+#        for i in range(N):
+#            y = target[i]
+#            sample_sum = 0
+#            for k in range(S):
+##                expf_map = map(lambda c:exp(samples[k]*abs(sigma[c][i]) + mu[c][i]), range(C))
+#                expf_map = map(func, range(C))
+#                exp_sum = 0
+#                for expf, num in zip(expf_map, range(C)):
+#                    exp_sum += expf
+#                    if num == y:
+#                        expf_y = expf
+##                sample_sum += weights[k]**C*expf_y/exp_sum
+#                sample_sum += weights[k] * expf_y / exp_sum
+#            sample_sum /= sqrt(pi)
+#            val += np.log(sample_sum)
         return val/N
 
     def gradient(self, z, indices):
@@ -128,32 +155,58 @@ class GPClassifier:
         C = self.num_classes
         S = self.quad.degree
         grad = np.zeros((M*C+M*M*C))
+        u = [np.array(self.parameters[M*C+M*M*j:M*C+M*M*(j+1)])\
+                          .reshape(M, M).dot(z) \
+           + np.array(self.parameters[M*j:M*(j+1)])\
+                          .reshape(M, 1) for j in range(C)] # global variables
         Knn = self.Knn[indices, indices]
         Knm = self.Knm[indices, :]
         Kmm_inv = self.Kmm_inv
         A = self.A[indices]
+        delta = [np.diag(1.0/self.parameters[M*C+M*M*c:M*C+M*M*(c+1)]\
+                                 .reshape(M, M).diagonal()) for c in range(C)]
+# new
+        sigma = np.abs(np.diag(Knn - A.dot(Knm.T))).reshape((1, N))
         samples = self.quad.get_samples().reshape((S, 1))
         weights = self.quad.get_weights().reshape((S, 1))
         f = []
-        ss = samples.dot(np.abs(np.diag(Knn - A.dot(Knm.T))).reshape((1, N))) # samples.dot(sigma)
         for c in range(C):
-            m = np.array(self.parameters[M*c:M*(c+1)]).reshape(M, 1)
-            L = self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M, M)
-            delta = np.diag(1.0/L.diagonal())
-            u = L.dot(z) + m
-            mu = A.dot(u)
-            f.append(np.sum(np.exp(ss + mu.T) * weights, axis=0)/sqrt(pi))
-            ku = Kmm_inv.dot(u)
-            grad[M*c:M*(c+1)] -= ku.ravel()
-            grad[M*C+M*M*c:M*C+M*M*(c+1)] -= ku.dot(z.T).ravel()
-            grad[M*C+M*M*c:M*C+M*M*(c+1)] += delta.ravel()
+            mu = A.dot(u[c])
+            f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
         sumf = np.sum(f, axis=0)
         for i in range(N):
             y = target[i]
-            approx = f[y][i]/sumf[i]
+            approx = f[y][i]/sumf[y]
             grad[M*y:M*(y+1)] += (1-approx)*A[i, :]
             grad[M*C+M*M*y:M*C+M*M*(y+1)] += \
-                              (1-approx)*A[i, :].reshape(M, 1).dot(z.T).ravel()
+                          (1-approx)*A[i, :].reshape(M, 1).dot(z.T).ravel()
+## old
+#        sigma = np.abs(np.diag(Knn - A.dot(Knm.T)))
+#        mu = [A.dot(u[j]).ravel() for j in range(C)]
+#        func = lambda c: exp(samples[k]*sigma[i] + mu[c][i])
+#        samples = self.quad.get_samples()
+#        weights = self.quad.get_weights()
+#        for i in range(N):
+#            y = target[i]
+#            sample_sum = 0
+#            for k in range(S):
+#                expf_map = map(func, range(C))
+#                exp_sum = 0
+#                for expf, num in zip(expf_map, range(C)):
+#                    exp_sum += expf
+#                    if num == y:
+#                        expf_y = expf
+##                sample_sum += weights[k]**C * expf_y/exp_sum
+#                sample_sum += weights[k] * expf_y / exp_sum
+#            sample_sum /= sqrt(pi)
+#            grad[M*y:M*(y+1)] += (1-sample_sum)*A[i, :]
+#            grad[M*C+M*M*y:M*C+M*M*(y+1)] += \
+#                (1-sample_sum)*A[i, :].reshape(M, 1).dot(z.T).ravel()
+
+        for j in range(C):
+            grad[M*j:M*(j+1)] -= Kmm_inv.dot(u[j]).ravel()
+            grad[M*C+M*M*j:M*C+M*M*(j+1)] -= Kmm_inv.dot(u[j]).dot(z.T).ravel()
+            grad[M*C+M*M*j:M*C+M*M*(j+1)] += delta[j].ravel()
         return grad
 
     def sample_x(self, N):
@@ -194,22 +247,8 @@ class GPClassifier:
             self.parameters[M*C+M*M*c:M*C+M*M*(c+1)] *= self.mask
         self.learning_rate = self.r0*(1+self.r0*0.05*t)**(-3/4)
         h = self.inducing_points
-        Kmm = self.Kmm
-        Kmm_inv = self.Kmm_inv
-        Knm = self.Knm
-        A = self.A
-        subset = self.sample_x(M)
-        self.inducing_points = self.xTr[subset]
-        self.inducing_points_target = self.yTr[subset]
-        self.Kmm = self.kernel(self.inducing_points, self.inducing_points)
-        self.Kmm_inv = cho_inverse(self.Kmm)
-        self.Knm = self.kernel(self.xTr, self.inducing_points)
-        self.A = self.Knm.dot(self.Kmm_inv)
+        self.inducing_points = self.xTr[self.sample_x(M)]
         if value <= self.objective(z, indices):
-            self.Kmm = Kmm
-            self.Kmm_inv = Kmm_inv
-            self.Knm = Knm
-            self.A = A
             self.inducing_points = h
 
     def predict_proba(self, xTe):
@@ -224,6 +263,8 @@ class GPClassifier:
         Kmm = self.kernel(h, h)
         Kmm_inv = cho_inverse(Kmm)
         A = Knm.dot(Kmm_inv)
+        
+# new
         samples = self.quad.get_samples().reshape((S, 1))
         weights = self.quad.get_weights().reshape((S, 1))
         f = []
@@ -235,16 +276,38 @@ class GPClassifier:
             f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
         sumf = np.sum(f, axis=0)
         for i in range(N):
-            probs[i, :] = [f[c][i]/sumf[i] for c in range(C)]
+            probs[i, :] = [f[c][i]/sumf[c] for c in range(C)]
+## old
+#        mu = []
+#        sigma = []
+#        for j in range(C):
+#            m = self.parameters[M*j:M*(j+1)].reshape(M, 1)
+#            L = self.parameters[M*C+M*M*j:M*C+M*M*(j+1)].reshape(M, M)
+#            mu.append(A.dot(m).ravel())
+#            sigma.append(np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()))
+#        func = lambda c: exp(samples[k]*sigma[c][i] + mu[c][i])
+#        samples = self.quad.get_samples()
+#        weights = self.quad.get_weights()
+#        for i in range(N):
+#            sample_sum = 0
+#            for j in range(C):
+#                for k in range(S):
+#                    expf_map = map(func, range(C))
+#                    exp_sum = 0
+#                    for expf, num in zip(expf_map, range(C)):
+#                        exp_sum += expf
+#                        if num == j:
+#                            expf_y = expf
+##                    sample_sum += weights[k]**C * expf_y/exp_sum
+#                    sample_sum += weights[k] * expf_y/exp_sum
+#                sample_sum /= sqrt(pi)
+#                probs[i, j] = sample_sum
         return probs
 
     def predict(self, xTe):
         N, _ = xTe.shape
         probs = self.predict_proba(xTe)
         return np.array([self.labels[np.argmax(probs[i, :])] for i in range(N)])
-
-    def get_inducing_points(self):
-        return self.inducing_points, self.inducing_points_target
 
     def kernel(self, A, B):
         return compute_kernel(A, B, ktype=self.kernel_type, **self.kernel_args)
@@ -325,14 +388,14 @@ class GPClassifier:
                         error_tr = np.sum(len(np.where(self.predict(self.xTr) \
                                    != self.yTr)[0])) / float(self.xTr.shape[0])
                         ydata1.append(error_tr)
-                        if error_tr <= error_tr_min:
+                        if error_tr < error_tr_min:
                             error_tr_min = error_tr
                         line_tr.set_data(xdata, ydata1)
                         if is_optimizing_on_te:
                             error_te = np.sum(len(np.where(self.predict(self.xTe) \
                                        != self.yTe)[0])) / float(self.xTe.shape[0])
                             ydata2.append(error_te)
-                            if error_te <= error_te_min:
+                            if error_te < error_te_min:
                                 error_te_min = error_te
                                 self.parameters_best = self.parameters
                             line_te.set_data(xdata, ydata2)

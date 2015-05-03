@@ -22,7 +22,7 @@ del data
 
 t0 = time.time()
 clf_gp = GPClassifier(xTr, yTr, \
-                   alpha=0.3, max_iter=500, num_inducing_points=1000, \
+                   alpha=0.1, max_iter=500, num_inducing_points=800, \
                    kernel_type='rbf', kernel_args={'gamma':1.0}, \
                    learning_rate=0.01, verbose=2)
 clf_gp.fit()
