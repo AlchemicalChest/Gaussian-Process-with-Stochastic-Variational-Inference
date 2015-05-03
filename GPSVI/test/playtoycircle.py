@@ -9,7 +9,7 @@ from sklearn import datasets
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 import matplotlib.pyplot as plt
-from GPClassifier import GPClassifier
+from GPSVI.core.GPClassifier import GPClassifier
 
 np.random.seed(0)
 

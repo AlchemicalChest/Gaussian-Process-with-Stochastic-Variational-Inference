@@ -193,24 +193,24 @@ class GPClassifier:
         for c in range(C):
             self.parameters[M*C+M*M*c:M*C+M*M*(c+1)] *= self.mask
         self.learning_rate = self.r0*(1+self.r0*0.05*t)**(-3/4)
-        h = self.inducing_points
-        Kmm = self.Kmm
-        Kmm_inv = self.Kmm_inv
-        Knm = self.Knm
-        A = self.A
-        subset = self.sample_x(M)
-        self.inducing_points = self.xTr[subset]
-        self.inducing_points_target = self.yTr[subset]
-        self.Kmm = self.kernel(self.inducing_points, self.inducing_points)
-        self.Kmm_inv = cho_inverse(self.Kmm)
-        self.Knm = self.kernel(self.xTr, self.inducing_points)
-        self.A = self.Knm.dot(self.Kmm_inv)
-        if value <= self.objective(z, indices):
-            self.Kmm = Kmm
-            self.Kmm_inv = Kmm_inv
-            self.Knm = Knm
-            self.A = A
-            self.inducing_points = h
+#        h = self.inducing_points
+#        Kmm = self.Kmm
+#        Kmm_inv = self.Kmm_inv
+#        Knm = self.Knm
+#        A = self.A
+#        subset = self.sample_x(M)
+#        self.inducing_points = self.xTr[subset]
+#        self.inducing_points_target = self.yTr[subset]
+#        self.Kmm = self.kernel(self.inducing_points, self.inducing_points)
+#        self.Kmm_inv = cho_inverse(self.Kmm)
+#        self.Knm = self.kernel(self.xTr, self.inducing_points)
+#        self.A = self.Knm.dot(self.Kmm_inv)
+#        if value*0.50 <= self.objective(z, indices):
+#            self.Kmm = Kmm
+#            self.Kmm_inv = Kmm_inv
+#            self.Knm = Knm
+#            self.A = A
+#            self.inducing_points = h
 
     def predict_proba(self, xTe):
         N, _ = xTe.shape
@@ -317,7 +317,7 @@ class GPClassifier:
             # for debugging
             if self.verbose > 0:
                 if self.verbose > 1:
-                    interval = 50
+                    interval = 500
                     if self.verbose > 2:
                         interval = 1
                     if t % interval == 0 or t == self.max_iter:
