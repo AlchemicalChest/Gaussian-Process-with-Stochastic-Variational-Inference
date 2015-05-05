@@ -298,19 +298,11 @@ class GPClassifier:
                 xdata = [t] # steps
                 vals = [val]
                 score_tr = self.score(self.xTr[indices], self.yTr[indices])
-#                error_tr = np.sum(len(np.where(self.predict(self.xTr) \
-#                           != self.yTr)[0])) / float(self.xTr.shape[0])
-#                ydata1 = [error_tr]
                 ydata1 = [score_tr]
-#                error_tr_min = error_tr
                 score_tr_max = score_tr
                 if is_optimizing_on_te:
                     score_te = self.score(self.xTe, self.yTe)
-#                    error_te = np.sum(len(np.where(self.predict(self.xTe) \
-#                               != self.yTe)[0])) / float(self.xTe.shape[0])
-#                    ydata2 = [error_te]
                     ydata2 = [score_te]
-#                    error_te_min = error_te
                     score_te_max = score_te
                     plt.subplot(211)
                     plt.title(r'Training performance')
@@ -335,7 +327,6 @@ class GPClassifier:
                 plt.legend(loc=4)
                 plt.ylim(np.min(vals), np.max(vals))
                 plt.grid(True)
-
         # perform stochastic gradient descent (max(func))
         t0 = time.time()
         while t < self.max_iter and linalg.norm(grad) > self.tolerance:
@@ -358,18 +349,11 @@ class GPClassifier:
                     if t % interval == 0 or t == self.max_iter:
                         xdata.append(t)
                         score_tr = self.score(self.xTr[indices], self.yTr[indices])
-#                        error_tr = np.sum(len(np.where(self.predict(self.xTr) \
-#                                   != self.yTr)[0])) / float(self.xTr.shape[0])
-#                        ydata1.append(error_tr)
                         ydata1.append(score_tr)
-#                        if error_tr <= error_tr_min:
-#                            error_tr_min = error_tr
                         score_tr_max = max(score_tr_max, score_tr)
                         line_tr.set_data(xdata, ydata1)
                         if is_optimizing_on_te:
                             score_te = self.score(self.xTe, self.yTe)
-#                            error_te = np.sum(len(np.where(self.predict(self.xTe) \
-#                                       != self.yTe)[0])) / float(self.xTe.shape[0])
                             ydata2.append(score_te)
                             if score_te >= score_te_max:
                                 score_te_max = score_te
