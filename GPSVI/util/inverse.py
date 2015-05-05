@@ -14,6 +14,6 @@ def cho_inverse(K, sigma=None):
     if sigma is None:
         sigma = 1.0 / K.shape[1]
     M = K.shape[0]
-    L = cholesky(K+sigma*100*eye(M,M), lower=True)
+    L = cholesky(K+sigma*1000*eye(M,M), lower=True)
 #    L = cholesky(K, lower=True)
     return cho_solve((L, True), eye(M,M))

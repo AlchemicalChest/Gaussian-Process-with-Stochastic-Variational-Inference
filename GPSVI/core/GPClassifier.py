@@ -72,12 +72,16 @@ class GPClassifier:
             subset = self.sample_x(M)
             self.inducing_points = xTr[subset]
             self.inducing_points_target = yTr[subset]
+            self.isubset = subset
             if self.verbose > 0:
                 print('computing kernel matrices...')
-            self.Kmm = self.kernel(self.inducing_points, self.inducing_points)
+            
+            # Knn can be too large
+            h = self.inducing_points
+            self.Knn = self.kernel(xTr, diag=True)
+            self.Kmm = self.kernel(h)
             self.Kmm_inv = cho_inverse(self.Kmm)
-            self.Knn = self.kernel(xTr, xTr)
-            self.Knm = self.kernel(xTr, self.inducing_points)
+            self.Knm = self.kernel(xTr, h)
             self.A = self.Knm.dot(self.Kmm_inv)
             self.mask = np.tril(np.ones((M, M))).ravel()
             if self.verbose > 0:
@@ -102,9 +106,15 @@ class GPClassifier:
         M = self.num_inducing_points
         C = self.num_classes
         S = self.quad.degree
-        Knn = self.Knn[indices, indices]
+#        x = self.xTr[indices, :]
+#        h = self.inducing_points
+        Knn = self.Knn[indices]
+#        Knn = self.kernel(x, diag=True)
         Kmm = self.Kmm
-        A = self.A[indices, :]
+#        Kmm_inv = self.Kmm_inv
+#        Kmm = self.Knn[self.isubset][:, self.isubset]
+        A = self.A[indices]
+#        A = self.kernel(x, h).dot(Kmm_inv)
         samples = self.quad.get_samples().reshape((S, 1))
         weights = self.quad.get_weights().reshape((S, 1))
         f = []
@@ -112,8 +122,12 @@ class GPClassifier:
             m = self.parameters[M*c:M*(c+1)].reshape(M, 1)
             L = self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M, M)
             mu = A.dot(m)
-            sigma = np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()).reshape((1,N))
-            f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
+            LL = L.dot(L.T) - Kmm
+#            B = [(A[i,:]*LL*A[i, :].reshape((M, 1))).sum() for i in range(N)]
+            B = np.einsum('ij,ij->i', A.dot(LL), A)
+            sigma = np.abs(Knn - B).reshape((1, N))
+#            sigma = np.abs((Knn + (A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal())).reshape((1,N))
+            f.append((np.exp(samples.dot(sigma) + mu.T) * weights).sum(axis=0)/sqrt(pi))
         sumf = np.sum(f, axis=0)
         for i in range(N):
             y = target[i]
@@ -128,21 +142,28 @@ class GPClassifier:
         C = self.num_classes
         S = self.quad.degree
         grad = np.zeros((M*C+M*M*C))
-        Knn = self.Knn[indices, indices]
-        Knm = self.Knm[indices, :]
+#        x = self.xTr[indices, :]
+#        h = self.inducing_points
+        Knn = self.Knn[indices]
+#        Knn = self.kernel(x, diag=True)
+        Knm = self.Knm[indices]
+#        Knm = self.kernel(x, h)
         Kmm_inv = self.Kmm_inv
         A = self.A[indices]
+#        A = self.kernel(x, h).dot(Kmm_inv)
         samples = self.quad.get_samples().reshape((S, 1))
         weights = self.quad.get_weights().reshape((S, 1))
         f = []
-        ss = samples.dot(np.abs(np.diag(Knn - A.dot(Knm.T))).reshape((1, N))) # samples.dot(sigma)
+        B = np.einsum('ij,ij->i', A, Knm)
+#        ss = samples.dot(np.abs(Knn - A.dot(Knm.T).diagonal()).reshape((1, N))) # samples.dot(sigma)
+        ss = samples.dot(np.abs(Knn - B).reshape((1, N)))
         for c in range(C):
             m = np.array(self.parameters[M*c:M*(c+1)]).reshape(M, 1)
             L = self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M, M)
             delta = np.diag(1.0/L.diagonal())
             u = L.dot(z) + m
             mu = A.dot(u)
-            f.append(np.sum(np.exp(ss + mu.T) * weights, axis=0)/sqrt(pi))
+            f.append((np.exp(ss + mu.T) * weights).sum(axis=0)/sqrt(pi))
             ku = Kmm_inv.dot(u)
             grad[M*c:M*(c+1)] -= ku.ravel()
             grad[M*C+M*M*c:M*C+M*M*(c+1)] -= ku.dot(z.T).ravel()
@@ -193,8 +214,10 @@ class GPClassifier:
         for c in range(C):
             self.parameters[M*C+M*M*c:M*C+M*M*(c+1)] *= self.mask
         self.learning_rate = self.r0*(1+self.r0*0.05*t)**(-3/4)
+        
 #        h = self.inducing_points
-#        Kmm = self.Kmm
+##        Kmm = self.Kmm
+#        Kmm = self.Knn[self.isubset, self.isubset]
 #        Kmm_inv = self.Kmm_inv
 #        Knm = self.Knm
 #        A = self.A
@@ -219,10 +242,10 @@ class GPClassifier:
         S = self.quad.degree
         h = self.inducing_points
         probs = np.zeros((N, C))
-        Knn = self.kernel(xTe, xTe)
+        Knn = self.kernel(xTe, diag=True)
         Knm = self.kernel(xTe, h)
-        Kmm = self.kernel(h, h)
-        Kmm_inv = cho_inverse(Kmm)
+        Kmm = self.Kmm
+        Kmm_inv = self.Kmm_inv
         A = Knm.dot(Kmm_inv)
         samples = self.quad.get_samples().reshape((S, 1))
         weights = self.quad.get_weights().reshape((S, 1))
@@ -231,8 +254,14 @@ class GPClassifier:
             m = self.parameters[M*c:M*(c+1)].reshape(M, 1)
             L = self.parameters[M*C+M*M*c:M*C+M*M*(c+1)].reshape(M, M)
             mu = A.dot(m)
-            sigma = np.abs((Knn + A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal()).reshape((1,N))
-            f.append(np.sum(np.exp(samples.dot(sigma) + mu.T) * weights, axis=0)/sqrt(pi))
+            LL = L.dot(L.T) - Kmm
+#            B = [(A[i,:]*LL*A[i, :].reshape((M, 1))).sum() for i in range(N)]
+#            B = [(A[i,:]*LL*A[i, :].reshape((M, 1))).sum() for i in range(N)]
+#            B = np.einsum('ip,pq,iq->i', A, LL, A)
+            B = np.einsum('ij,ij->i', A.dot(LL), A)
+            sigma = np.abs(Knn - B).reshape((1, N))
+#            sigma = np.abs((Knn - (A.dot(L.dot(L.T) - Kmm).dot(A.T)).diagonal())).reshape((1,N))
+            f.append((np.exp(samples.dot(sigma) + mu.T) * weights).sum(axis=0)/sqrt(pi))
         sumf = np.sum(f, axis=0)
         for i in range(N):
             probs[i, :] = [f[c][i]/sumf[i] for c in range(C)]
@@ -246,8 +275,8 @@ class GPClassifier:
     def get_inducing_points(self):
         return self.inducing_points, self.inducing_points_target
 
-    def kernel(self, A, B):
-        return compute_kernel(A, B, ktype=self.kernel_type, **self.kernel_args)
+    def kernel(self, A, B=None, diag=False):            
+        return compute_kernel(A, B, diag, ktype=self.kernel_type, **self.kernel_args)
 
     def optimize(self):
         if self.verbose > 0:
@@ -268,28 +297,34 @@ class GPClassifier:
                 plt.rc('text', usetex=True)
                 xdata = [t] # steps
                 vals = [val]
-                error_tr = np.sum(len(np.where(self.predict(self.xTr) \
-                           != self.yTr)[0])) / float(self.xTr.shape[0])
-                ydata1 = [error_tr]
-                error_tr_min = error_tr
+                score_tr = self.score(self.xTr[indices], self.yTr[indices])
+#                error_tr = np.sum(len(np.where(self.predict(self.xTr) \
+#                           != self.yTr)[0])) / float(self.xTr.shape[0])
+#                ydata1 = [error_tr]
+                ydata1 = [score_tr]
+#                error_tr_min = error_tr
+                score_tr_max = score_tr
                 if is_optimizing_on_te:
-                    error_te = np.sum(len(np.where(self.predict(self.xTe) \
-                               != self.yTe)[0])) / float(self.xTe.shape[0])
-                    ydata2 = [error_te]
-                    error_te_min = error_te
+                    score_te = self.score(self.xTe, self.yTe)
+#                    error_te = np.sum(len(np.where(self.predict(self.xTe) \
+#                               != self.yTe)[0])) / float(self.xTe.shape[0])
+#                    ydata2 = [error_te]
+                    ydata2 = [score_te]
+#                    error_te_min = error_te
+                    score_te_max = score_te
                     plt.subplot(211)
                     plt.title(r'Training performance')
                     line_tr, = plt.plot(xdata, ydata1, 'g', \
-                                        label=r'Training Error')
+                                        label=r'Training Score')
                     line_te, = plt.plot(xdata, ydata2, 'b', \
-                                        label=r'Testing Error')
+                                        label=r'Testing Score')
                 else:
                     plt.subplot(211)
                     plt.title(r'Training performance')
                     line_tr, = plt.plot(xdata, ydata1, 'g', \
-                                        label=r'Training Error')
-                plt.legend(loc=1)
-                plt.ylabel(r'Error')
+                                        label=r'Training Score')
+                plt.legend(loc=4)
+                plt.ylabel(r'Score')
                 plt.ylim(0, 1)
                 plt.grid(True)
                 plt.subplot(212)
@@ -317,23 +352,27 @@ class GPClassifier:
             # for debugging
             if self.verbose > 0:
                 if self.verbose > 1:
-                    interval = 500
+                    interval = 10
                     if self.verbose > 2:
                         interval = 1
                     if t % interval == 0 or t == self.max_iter:
                         xdata.append(t)
-                        error_tr = np.sum(len(np.where(self.predict(self.xTr) \
-                                   != self.yTr)[0])) / float(self.xTr.shape[0])
-                        ydata1.append(error_tr)
-                        if error_tr <= error_tr_min:
-                            error_tr_min = error_tr
+                        score_tr = self.score(self.xTr[indices], self.yTr[indices])
+#                        error_tr = np.sum(len(np.where(self.predict(self.xTr) \
+#                                   != self.yTr)[0])) / float(self.xTr.shape[0])
+#                        ydata1.append(error_tr)
+                        ydata1.append(score_tr)
+#                        if error_tr <= error_tr_min:
+#                            error_tr_min = error_tr
+                        score_tr_max = max(score_tr_max, score_tr)
                         line_tr.set_data(xdata, ydata1)
                         if is_optimizing_on_te:
-                            error_te = np.sum(len(np.where(self.predict(self.xTe) \
-                                       != self.yTe)[0])) / float(self.xTe.shape[0])
-                            ydata2.append(error_te)
-                            if error_te <= error_te_min:
-                                error_te_min = error_te
+                            score_te = self.score(self.xTe, self.yTe)
+#                            error_te = np.sum(len(np.where(self.predict(self.xTe) \
+#                                       != self.yTe)[0])) / float(self.xTe.shape[0])
+                            ydata2.append(score_te)
+                            if score_te >= score_te_max:
+                                score_te_max = score_te
                                 self.parameters_best = self.parameters
                             line_te.set_data(xdata, ydata2)
                         plt.subplot(211)
@@ -347,15 +386,15 @@ class GPClassifier:
                         plt.draw()
                 if self.verbose > 1:
                     if is_optimizing_on_te:
-                        print('tr_error = {} \nte_error = {}'\
+                        print('score_tr = {} score_te = {}'\
                               .format(ydata1[-1], ydata2[-1]))
                     else:
-                        print('tr_error = {}'.format(ydata1[-1]))
+                        print('score_tr = {}'.format(ydata1[-1]))
             if self.verbose > 0:
                 print('val={:.16f}, time = {:.5f}s'.format(val, time.time()-t0))
         if is_optimizing_on_te and self.verbose > 2:
             self.parameters = self.parameters_best
             if self.verbose > 2:
-                print('Best Training Error = {} \nBest Testing  Error = {}'\
-                      .format(error_tr_min, error_te_min))
+                print('Best Training Score = {} \nBest Testing Score = {}'\
+                      .format(score_tr_max, score_te_max))
         

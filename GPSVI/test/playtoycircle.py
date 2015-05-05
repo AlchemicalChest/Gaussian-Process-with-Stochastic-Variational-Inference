@@ -27,8 +27,9 @@ ax.set_title('Original Testing Data')
 ax.scatter(x_te[:,0], x_te[:,1], c=[colors[y] for y in y_te], s=40)
 
 clf = GPClassifier(x_tr, y_tr, None, None, \
-                   alpha=0.8, max_iter=200, num_inducing_points=100, \
-                   learning_rate=0.01, verbose=3)
+                   alpha=0.1, max_iter=500, num_inducing_points=180, \
+                   kernel_type='rbf', kernel_args={'gamma':80.0}, \
+                   learning_rate=0.01, verbose=2)
 clf.fit()
 pd = clf.predict(x_te)
 print('SVI error = {}'.format(np.sum(len(np.where(pd != y_te)[0])) / float(x_te.shape[0])))

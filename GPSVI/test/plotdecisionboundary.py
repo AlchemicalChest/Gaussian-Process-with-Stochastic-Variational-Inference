@@ -38,8 +38,8 @@ cm_bright = ListedColormap(['#d7191c', '#2b83ba'])
 
 #%% gp svi
 clf_gp = GPClassifier(xTr, yTr, \
-                      alpha=0.7, max_iter=3000, num_inducing_points=50, \
-                      kernel_type='rbf', kernel_args={'gamma':2.0}, \
+                      alpha=0.2, max_iter=10000, num_inducing_points=200, \
+                      kernel_type='rbf', kernel_args={'gamma':4.0}, \
                       learning_rate=0.01, verbose=2)
 clf_gp.fit()
 score = clf_gp.score(xTe, yTe)
